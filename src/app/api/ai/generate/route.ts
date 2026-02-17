@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { checkQuota, recordUsage } from "@/lib/ai-quota";
 
+const API_URL = process.env.GEMINI_FREE_API_URL || "https://gemini-api.inspiredjinyao.com";
+const API_KEY = process.env.GEMINI_FREE_API_KEY;
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt, style, count } = await req.json();
@@ -10,8 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    const apiKey = process.env.STABILITY_API_KEY;
-    if (!apiKey) {
+    if (!API_KEY) {
       return NextResponse.json({ error: "AI generation not configured" }, { status: 503 });
     }
 
@@ -39,19 +41,17 @@ export async function POST(req: NextRequest) {
         ? `${prompt}, frame ${i + 1} of ${frameCount} animation sequence, ${style || "pixel art"} style, game sprite, transparent background`
         : `${prompt}, ${style || "pixel art"} style, game sprite, transparent background`;
 
-      const res = await fetch("https://api.stability.ai/v2beta/stable-image/generate/sd3", {
+      const res = await fetch(`${API_URL}/v1/images/generations`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "image/png",
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json",
         },
-        body: (() => {
-          const fd = new FormData();
-          fd.append("prompt", framePrompt);
-          fd.append("output_format", "png");
-          fd.append("aspect_ratio", "1:1");
-          return fd;
-        })(),
+        body: JSON.stringify({
+          model: "gemini-3-pro-image",
+          prompt: framePrompt,
+          response_format: "b64_json",
+        }),
       });
 
       if (!res.ok) {
@@ -59,9 +59,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `AI API error: ${err}` }, { status: 502 });
       }
 
-      const buffer = await res.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString("base64");
-      images.push(`data:image/png;base64,${base64}`);
+      const json = await res.json();
+      const b64 = json.data?.[0]?.b64_json;
+      if (!b64) {
+        return NextResponse.json({ error: "No image returned" }, { status: 502 });
+      }
+      images.push(`data:image/png;base64,${b64}`);
     }
 
     // Record usage

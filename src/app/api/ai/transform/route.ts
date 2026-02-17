@@ -4,11 +4,49 @@ import { checkQuota, recordUsage } from "@/lib/ai-quota";
 
 type Action = "variants" | "recolor" | "upscale" | "extend-frames";
 
+const API_URL = process.env.GEMINI_FREE_API_URL || "https://gemini-api.inspiredjinyao.com";
+const API_KEY = process.env.GEMINI_FREE_API_KEY;
+
+async function geminiImageToImage(imageBase64: string, prompt: string): Promise<string | null> {
+  const res = await fetch(`${API_URL}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gemini-3-pro-image",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:image/png;base64,${imageBase64}` } },
+          { type: "text", text: prompt },
+        ],
+      }],
+    }),
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+
+  const json = await res.json();
+  const text = json.choices?.[0]?.message?.content || "";
+
+  // Extract image URL from markdown ![...](...) in response
+  const match = text.match(/!\[.*?\]\((.*?)\)/);
+  if (!match) return null;
+
+  // Fetch the proxy image and convert to base64
+  const imgRes = await fetch(match[1]);
+  if (!imgRes.ok) return null;
+  const buf = await imgRes.arrayBuffer();
+  return Buffer.from(buf).toString("base64");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { action, imageBase64, prompt, count } = await req.json() as {
       action: Action;
-      imageBase64: string; // data:image/png;base64,... or raw base64
+      imageBase64: string;
       prompt?: string;
       count?: number;
     };
@@ -17,8 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "action and imageBase64 required" }, { status: 400 });
     }
 
-    const apiKey = process.env.STABILITY_API_KEY;
-    if (!apiKey) {
+    if (!API_KEY) {
       return NextResponse.json({ error: "AI not configured" }, { status: 503 });
     }
 
@@ -35,62 +72,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Strip data URL prefix if present
     const raw = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-    const imgBuffer = Buffer.from(raw, "base64");
-
     const images: string[] = [];
 
-    if (action === "upscale") {
-      const fd = new FormData();
-      fd.append("image", new Blob([imgBuffer], { type: "image/png" }), "sprite.png");
-      fd.append("output_format", "png");
+    const promptMap: Record<string, string> = {
+      variants: prompt || "Create a variation of this game sprite with a different pose, keep the same character and art style, transparent background",
+      recolor: prompt || "Recolor this sprite with a completely different color palette, keep the same pose and shape, transparent background",
+      upscale: "Upscale this image to higher resolution, preserve all details and pixel art style exactly, transparent background",
+      "extend-frames": prompt || "Create the next animation frame for this game sprite, maintain consistent style and character, transparent background",
+    };
 
-      const res = await fetch("https://api.stability.ai/v2beta/stable-image/upscale/conservative", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, Accept: "image/png" },
-        body: fd,
-      });
+    const iterations = action === "extend-frames" ? frameCount
+      : action === "variants" ? Math.min(count || 3, 4)
+      : 1;
 
-      if (!res.ok) {
-        const err = await res.text();
-        return NextResponse.json({ error: `Upscale failed: ${err}` }, { status: 502 });
+    for (let i = 0; i < iterations; i++) {
+      const p = action === "extend-frames"
+        ? `${promptMap[action]}, frame ${i + 1} of ${frameCount}`
+        : promptMap[action];
+
+      const b64 = await geminiImageToImage(raw, p);
+      if (!b64) {
+        return NextResponse.json({ error: "AI failed to generate image" }, { status: 502 });
       }
-
-      const buf = await res.arrayBuffer();
-      images.push(`data:image/png;base64,${Buffer.from(buf).toString("base64")}`);
-    } else {
-      // variants, recolor, extend-frames all use image-to-image
-      const promptMap: Record<string, string> = {
-        variants: prompt || "game sprite variation, same character different pose, transparent background",
-        recolor: prompt || "same sprite recolored with different color palette, transparent background",
-        "extend-frames": prompt || "next frame in animation sequence, game sprite, transparent background",
-      };
-
-      for (let i = 0; i < (action === "extend-frames" ? frameCount : (action === "variants" ? Math.min(count || 3, 4) : 1)); i++) {
-        const fd = new FormData();
-        fd.append("image", new Blob([imgBuffer], { type: "image/png" }), "sprite.png");
-        fd.append("prompt", action === "extend-frames"
-          ? `${promptMap[action]}, frame ${i + 1} of ${frameCount}`
-          : promptMap[action]);
-        fd.append("output_format", "png");
-        fd.append("strength", action === "recolor" ? "0.5" : "0.65");
-        fd.append("mode", "image-to-image");
-
-        const res = await fetch("https://api.stability.ai/v2beta/stable-image/generate/sd3", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, Accept: "image/png" },
-          body: fd,
-        });
-
-        if (!res.ok) {
-          const err = await res.text();
-          return NextResponse.json({ error: `AI error: ${err}` }, { status: 502 });
-        }
-
-        const buf = await res.arrayBuffer();
-        images.push(`data:image/png;base64,${Buffer.from(buf).toString("base64")}`);
-      }
+      images.push(`data:image/png;base64,${b64}`);
     }
 
     if (userId) {
