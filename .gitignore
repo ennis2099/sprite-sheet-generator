@@ -37,3 +37,7 @@ prisma/migrations/
 .vscode/
 *.swp
 *.swo
+
+# claude code
+.claude/
+.memsearch/
