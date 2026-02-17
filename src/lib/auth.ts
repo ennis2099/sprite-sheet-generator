@@ -1,12 +1,19 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Credentials from "next-auth/providers/credentials";
+import Resend from "next-auth/providers/resend";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { prisma } from "./prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  adapter: PrismaAdapter(prisma),
   providers: [
     GitHub,
+    Resend({
+      apiKey: process.env.RESEND_API_KEY,
+      from: process.env.EMAIL_FROM || "SpriteForge <onboarding@resend.dev>",
+    }),
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
@@ -30,7 +37,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (!user.email) return false;
-      if (account?.provider === "credentials") return true;
+      if (account?.provider === "credentials" || account?.provider === "resend") return true;
       await prisma.user.upsert({
         where: { email: user.email },
         update: {
@@ -63,6 +70,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/auth/signin",
+    verifyRequest: "/auth/verify",
   },
   session: { strategy: "jwt" },
 });
