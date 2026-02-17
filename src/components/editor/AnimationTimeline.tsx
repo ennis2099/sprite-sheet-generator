@@ -8,6 +8,8 @@ export function AnimationTimeline() {
   const togglePlaying = useEditorStore((s) => s.togglePlaying);
   const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame);
   const selectSprite = useEditorStore((s) => s.selectSprite);
+  const bins = useEditorStore((s) => s.bins);
+  const setActiveBin = useEditorStore((s) => s.setActiveBin);
   const removeFromAnimation = useEditorStore((s) => s.removeFromAnimation);
   const reorderAnimationFrames = useEditorStore((s) => s.reorderAnimationFrames);
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
@@ -58,7 +60,7 @@ export function AnimationTimeline() {
             onDragOver={(e) => { if (dragIndex === null) return; e.preventDefault(); setDragOverIndex(i); }}
             onDrop={(e) => { e.preventDefault(); if (dragIndex !== null && dragIndex !== i) reorderAnimationFrames(dragIndex, i); setDragIndex(null); setDragOverIndex(null); }}
             onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-            onClick={() => { setCurrentFrame(i); selectSprite(sprite!.id); }}
+            onClick={() => { setCurrentFrame(i); selectSprite(sprite!.id); const bi = bins.findIndex((b) => b.rects.some((r) => r.spriteId === sprite!.id)); if (bi >= 0) setActiveBin(bi); }}
             onContextMenu={(e) => { e.preventDefault(); removeFromAnimation(i); }}
             className="shrink-0 flex flex-col items-center justify-center cursor-pointer relative transition-all"
             style={{

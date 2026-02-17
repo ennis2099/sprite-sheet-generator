@@ -40,8 +40,14 @@ export function useAnimationPlayback() {
         }
         next = Math.max(0, Math.min(total - 1, next));
       }
+      const nextSpriteId = state.animation.frames[next] ?? null;
       setCurrentFrame(next);
-      selectSprite(state.animation.frames[next] ?? null);
+      selectSprite(nextSpriteId);
+      // Switch to the bin containing this sprite
+      if (nextSpriteId) {
+        const binIdx = state.bins.findIndex((b) => b.rects.some((r) => r.spriteId === nextSpriteId));
+        if (binIdx >= 0 && binIdx !== state.activeBin) state.setActiveBin(binIdx);
+      }
     }, interval);
 
     return () => clearInterval(timer);
