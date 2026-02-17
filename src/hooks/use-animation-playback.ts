@@ -12,6 +12,7 @@ export function useAnimationPlayback() {
   const mode = useEditorStore((s) => s.animation.mode);
   const frames = useEditorStore((s) => s.animation.frames);
   const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame);
+  const selectSprite = useEditorStore((s) => s.selectSprite);
 
   const directionRef = useRef(1); // 1 = forward, -1 = backward (for pingpong)
 
@@ -23,12 +24,13 @@ export function useAnimationPlayback() {
       const state = useEditorStore.getState();
       const { currentFrame } = state.animation;
       const total = state.animation.frames.length;
+      let next: number;
 
       if (mode === "loop") {
-        setCurrentFrame((currentFrame + 1) % total);
+        next = (currentFrame + 1) % total;
       } else {
         // pingpong
-        let next = currentFrame + directionRef.current;
+        next = currentFrame + directionRef.current;
         if (next >= total) {
           directionRef.current = -1;
           next = total - 2;
@@ -36,12 +38,14 @@ export function useAnimationPlayback() {
           directionRef.current = 1;
           next = 1;
         }
-        setCurrentFrame(Math.max(0, Math.min(total - 1, next)));
+        next = Math.max(0, Math.min(total - 1, next));
       }
+      setCurrentFrame(next);
+      selectSprite(state.animation.frames[next] ?? null);
     }, interval);
 
     return () => clearInterval(timer);
-  }, [playing, fps, mode, frames.length, setCurrentFrame]);
+  }, [playing, fps, mode, frames.length, setCurrentFrame, selectSprite]);
 
   // Reset direction when mode changes
   useEffect(() => {

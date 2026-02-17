@@ -7,6 +7,7 @@ export function AnimationTimeline() {
   const setFps = useEditorStore((s) => s.setFps);
   const togglePlaying = useEditorStore((s) => s.togglePlaying);
   const setCurrentFrame = useEditorStore((s) => s.setCurrentFrame);
+  const selectSprite = useEditorStore((s) => s.selectSprite);
   const removeFromAnimation = useEditorStore((s) => s.removeFromAnimation);
   const reorderAnimationFrames = useEditorStore((s) => s.reorderAnimationFrames);
   const toggleOnionSkin = useEditorStore((s) => s.toggleOnionSkin);
@@ -57,7 +58,7 @@ export function AnimationTimeline() {
             onDragOver={(e) => { if (dragIndex === null) return; e.preventDefault(); setDragOverIndex(i); }}
             onDrop={(e) => { e.preventDefault(); if (dragIndex !== null && dragIndex !== i) reorderAnimationFrames(dragIndex, i); setDragIndex(null); setDragOverIndex(null); }}
             onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-            onClick={() => setCurrentFrame(i)}
+            onClick={() => { setCurrentFrame(i); selectSprite(sprite!.id); }}
             onContextMenu={(e) => { e.preventDefault(); removeFromAnimation(i); }}
             className="shrink-0 flex flex-col items-center justify-center cursor-pointer relative transition-all"
             style={{
