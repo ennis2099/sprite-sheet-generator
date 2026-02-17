@@ -37,45 +37,22 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-5">
-          <a
-            href="#features"
-            className="transition-colors duration-150 hover:text-[var(--text)]"
-            style={{
-              fontSize: "11px",
-              fontWeight: 500,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Features
-          </a>
-          <a
-            href="#pricing"
-            className="transition-colors duration-150 hover:text-[var(--text)]"
-            style={{
-              fontSize: "11px",
-              fontWeight: 500,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Pricing
-          </a>
-          <a
-            href="#how-it-works"
-            className="transition-colors duration-150 hover:text-[var(--text)]"
-            style={{
-              fontSize: "11px",
-              fontWeight: 500,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Docs
-          </a>
+          {["Product", "Editor", "Features", "Pricing"].map((label) => (
+            <a
+              key={label}
+              href={label === "Editor" ? "/editor" : `#${label.toLowerCase()}`}
+              className="transition-colors duration-150 hover:text-[var(--text)]"
+              style={{
+                fontSize: "11px",
+                fontWeight: 500,
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              {label}
+            </a>
+          ))}
           <UserMenu />
           <Link
             href="/editor"

@@ -2,6 +2,20 @@ import { useEditorStore, SpriteItem } from "@/stores/editor-store";
 import { removeBackground } from "@/lib/bg-removal";
 import { useCallback, useRef, useState } from "react";
 
+function CtxItem({ label, shortcut, ai, danger, onClick }: { label: string; shortcut?: string; ai?: boolean; danger?: boolean; onClick: () => void }) {
+  const color = ai ? "var(--amber)" : danger ? "#EF4444" : "var(--text-dim)";
+  const hoverBg = ai ? "rgba(245,158,11,0.08)" : danger ? "rgba(239,68,68,0.08)" : "var(--bg-elevated)";
+  return (
+    <button onClick={onClick} className="flex items-center gap-1.5 w-full transition-all duration-100"
+      style={{ padding: "4px 10px", fontFamily: "var(--font-mono)", fontSize: 9, color }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = hoverBg; e.currentTarget.style.color = ai ? "#FBBF24" : danger ? "#EF4444" : "var(--text)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = ""; e.currentTarget.style.color = color; }}>
+      <span>{label}</span>
+      {shortcut && <span className="ml-auto" style={{ fontSize: 7, color: "var(--text-muted)" }}>{shortcut}</span>}
+    </button>
+  );
+}
+
 export function SpriteList() {
   const sprites = useEditorStore((s) => s.sprites);
   const selectedSpriteId = useEditorStore((s) => s.selectedSpriteId);
@@ -18,373 +32,145 @@ export function SpriteList() {
   const [processingBg, setProcessingBg] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [sidebarDragOver, setSidebarDragOver] = useState(false);
 
-  const handleFileUpload = useCallback(
-    (files: FileList) => {
-      const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
-      if (imageFiles.length === 0) return;
-      const newSprites: SpriteItem[] = [];
-      let loaded = 0;
-      imageFiles.forEach((file) => {
-        const img = new Image();
-        img.onload = () => {
-          newSprites.push({
-            id: crypto.randomUUID(),
-            name: file.name.replace(/\.[^.]+$/, ""),
-            file,
-            image: img,
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            trimmed: false,
-            isAi: false,
-          });
-          loaded++;
-          if (loaded === imageFiles.length) {
-            addSprites(newSprites);
-          }
-        };
-        img.src = URL.createObjectURL(file);
-      });
-    },
-    [addSprites]
-  );
+  const handleFileUpload = useCallback((files: FileList) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    const newSprites: SpriteItem[] = [];
+    let loaded = 0;
+    imageFiles.forEach((file) => {
+      const img = new Image();
+      img.onload = () => {
+        newSprites.push({ id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, ""), file, image: img, width: img.naturalWidth, height: img.naturalHeight, trimmed: false, isAi: false });
+        loaded++;
+        if (loaded === imageFiles.length) addSprites(newSprites);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }, [addSprites]);
 
-  const handleRemoveBg = useCallback(
-    async (spriteId: string) => {
-      const sprite = sprites.find((s) => s.id === spriteId);
-      if (!sprite?.image || processingBg) return;
-      setProcessingBg(spriteId);
-      try {
-        const result = await removeBackground(sprite.image);
-        updateSprite(spriteId, {
-          image: result.image,
-          width: result.image.naturalWidth,
-          height: result.image.naturalHeight,
-          file: new File([result.blob], `${sprite.name}-nobg.png`, { type: "image/png" }),
-        });
-      } catch (err) {
-        console.error("Background removal failed:", err);
-      } finally {
-        setProcessingBg(null);
-      }
-    },
-    [sprites, processingBg, updateSprite]
-  );
+  const handleRemoveBg = useCallback(async (spriteId: string) => {
+    const sprite = sprites.find((s) => s.id === spriteId);
+    if (!sprite?.image || processingBg) return;
+    setProcessingBg(spriteId);
+    try {
+      const result = await removeBackground(sprite.image);
+      updateSprite(spriteId, { image: result.image, width: result.image.naturalWidth, height: result.image.naturalHeight, file: new File([result.blob], `${sprite.name}-nobg.png`, { type: "image/png" }) });
+    } catch (err) { console.error("Background removal failed:", err); }
+    finally { setProcessingBg(null); }
+  }, [sprites, processingBg, updateSprite]);
 
   const spriteToBase64 = useCallback((sprite: SpriteItem): string | null => {
     if (!sprite.image) return null;
     const c = document.createElement("canvas");
-    c.width = sprite.width;
-    c.height = sprite.height;
+    c.width = sprite.width; c.height = sprite.height;
     const ctx = c.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(sprite.image, 0, 0);
     return c.toDataURL("image/png");
   }, []);
 
-  const handleAiAction = useCallback(
-    async (spriteId: string, action: "variants" | "recolor" | "upscale" | "extend-frames") => {
-      const sprite = sprites.find((s) => s.id === spriteId);
-      if (!sprite) return;
-      const b64 = spriteToBase64(sprite);
-      if (!b64) return;
-
-      const { addSprites, setAiProgress } = useEditorStore.getState();
-      const total = action === "variants" ? 3 : action === "extend-frames" ? 4 : 1;
-      const label = { variants: "Generating variants", recolor: "Recoloring", upscale: "Upscaling", "extend-frames": "Extending frames" }[action];
-      setAiProgress({ active: true, total, completed: 0, prompt: label });
-
-      try {
-        const res = await fetch("/api/ai/transform", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, imageBase64: b64, count: total }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setAiProgress({ active: false, total, completed: 0, prompt: label, error: data.error });
-          return;
-        }
-
-        for (let i = 0; i < data.images.length; i++) {
-          const img = new Image();
-          await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = data.images[i]; });
-          const suffix = action === "upscale" ? "-2x" : `-${action}-${i + 1}`;
-          addSprites([{
-            id: crypto.randomUUID(),
-            name: `${sprite.name}${suffix}`,
-            file: null, image: img,
-            width: img.naturalWidth, height: img.naturalHeight,
-            trimmed: false, isAi: true,
-          }]);
-          setAiProgress({ active: true, total, completed: i + 1, prompt: label });
-        }
-        setTimeout(() => setAiProgress(null), 2000);
-      } catch {
-        setAiProgress({ active: false, total, completed: 0, prompt: label, error: "Network error" });
+  const handleAiAction = useCallback(async (spriteId: string, action: "variants" | "recolor" | "upscale" | "extend-frames") => {
+    const sprite = sprites.find((s) => s.id === spriteId);
+    if (!sprite) return;
+    const b64 = spriteToBase64(sprite);
+    if (!b64) return;
+    const { addSprites: add, setAiProgress } = useEditorStore.getState();
+    const total = action === "variants" ? 3 : action === "extend-frames" ? 4 : 1;
+    const label = { variants: "Generating variants", recolor: "Recoloring", upscale: "Upscaling", "extend-frames": "Extending frames" }[action];
+    setAiProgress({ active: true, total, completed: 0, prompt: label });
+    try {
+      const res = await fetch("/api/ai/transform", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, imageBase64: b64, count: total }) });
+      const data = await res.json();
+      if (!res.ok) { setAiProgress({ active: false, total, completed: 0, prompt: label, error: data.error }); return; }
+      for (let i = 0; i < data.images.length; i++) {
+        const img = new Image();
+        await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = data.images[i]; });
+        const suffix = action === "upscale" ? "-2x" : `-${action}-${i + 1}`;
+        add([{ id: crypto.randomUUID(), name: `${sprite.name}${suffix}`, file: null, image: img, width: img.naturalWidth, height: img.naturalHeight, trimmed: false, isAi: true }]);
+        setAiProgress({ active: true, total, completed: i + 1, prompt: label });
       }
-    },
-    [sprites, spriteToBase64]
-  );
-
-  const handleContextMenu = (e: React.MouseEvent, spriteId: string) => {
-    e.preventDefault();
-    selectSprite(spriteId);
-    setContextMenu({ x: e.clientX, y: e.clientY, spriteId });
-  };
+      setTimeout(() => setAiProgress(null), 2000);
+    } catch { setAiProgress({ active: false, total, completed: 0, prompt: label, error: "Network error" }); }
+  }, [sprites, spriteToBase64]);
 
   return (
-    <div
-      className={`w-56 bg-[#0D0D0D] border-r border-[#1E1E1E] flex flex-col shrink-0 ${sidebarDragOver ? "ring-1 ring-inset ring-[#06B6D4]/40" : ""}`}
-      onDragOver={(e) => {
-        // Only handle file drags, not internal reorder
-        if (e.dataTransfer.types.includes("Files")) {
-          e.preventDefault();
-          setSidebarDragOver(true);
-        }
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-        setSidebarDragOver(false);
-      }}
-      onDrop={(e) => {
-        if (e.dataTransfer.files.length > 0) {
-          e.preventDefault();
-          e.stopPropagation();
-          setSidebarDragOver(false);
-          handleFileUpload(e.dataTransfer.files);
-        }
-      }}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[#1E1E1E]">
-        <span className="font-[family-name:var(--font-mono)] text-[10px] text-[#666] uppercase tracking-wider">
-          Sprites
-        </span>
-        <button
+    <div className="flex flex-col overflow-y-auto" style={{ background: "var(--bg-panel)", borderRight: "1px solid var(--border)" }}>
+      {/* Import section */}
+      <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+        <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Import</h4>
+        <div
           onClick={() => fileInputRef.current?.click()}
-          className="text-[10px] font-[family-name:var(--font-mono)] text-[#F59E0B] hover:text-[#FBBF24] transition-colors duration-150 cursor-pointer"
+          onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+          onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files); }}
+          className="cursor-pointer hover:border-[var(--cyan)] transition-colors"
+          style={{ border: "1px dashed var(--border)", padding: "10px 6px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)" }}
         >
-          + Add
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/png,image/webp,image/gif,image/jpeg"
-          className="hidden"
-          onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-        />
+          Drop PNG / JPG frames<br />or click to browse
+        </div>
+        <input ref={fileInputRef} type="file" multiple accept="image/png,image/webp,image/gif,image/jpeg" className="hidden"
+          onChange={(e) => e.target.files && handleFileUpload(e.target.files)} />
       </div>
-
-      {/* Sprite list */}
-      <div className="flex-1 overflow-y-auto">
-        {sprites.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full px-4 text-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M12 8v8M8 12h8" />
+      {/* AI Generate section */}
+      <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+        <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>AI Generate</h4>
+        <div className="flex flex-col gap-1">
+          <textarea placeholder="Pixel knight, 8 frames, walk cycle..." className="focus:outline-none focus:border-[var(--amber)]"
+            style={{ background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 9, padding: "4px 6px", resize: "none", height: 38 }} />
+          <button onClick={() => setAiModalOpen(true)} className="hover:shadow-[0_0_12px_rgba(245,158,11,0.3)] transition-all duration-200"
+            style={{ height: 20, background: "linear-gradient(135deg, #F59E0B, #F97316)", color: "#000", fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <svg viewBox="0 0 16 16" width="10" height="10" style={{ verticalAlign: "-1px", marginRight: 3 }}>
+              <path d="M8 0l1.5 4.5L14 6l-4.5 1.5L8 12l-1.5-4.5L2 6l4.5-1.5z" fill="#000" opacity="0.7" />
             </svg>
-            <p className="text-[10px] text-[#666] mt-2 font-[family-name:var(--font-mono)]">
-              Drop images here or click + Add
-            </p>
-          </div>
-        ) : (
-          sprites.map((sprite, index) => (
-            <div
-              key={sprite.id}
-              draggable
-              onDragStart={(e) => {
-                setDragIndex(index);
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", ""); // needed for Firefox
-              }}
-              onDragOver={(e) => {
-                if (dragIndex === null) return;
-                e.preventDefault();
-                setDragOverIndex(index);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (dragIndex !== null && dragIndex !== index) {
-                  reorderSprites(dragIndex, index);
-                }
-                setDragIndex(null);
-                setDragOverIndex(null);
-              }}
-              onDragEnd={() => {
-                setDragIndex(null);
-                setDragOverIndex(null);
-              }}
+            + Generate New...
+          </button>
+        </div>
+      </div>
+      {/* Sprites list */}
+      <div style={{ padding: "6px 8px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>
+          Sprites ({sprites.length})
+        </h4>
+        <div className="flex flex-col gap-px flex-1 overflow-y-auto">
+          {sprites.map((sprite, index) => (
+            <div key={sprite.id} draggable
+              onDragStart={(e) => { setDragIndex(index); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", ""); }}
+              onDragOver={(e) => { if (dragIndex === null) return; e.preventDefault(); setDragOverIndex(index); }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (dragIndex !== null && dragIndex !== index) reorderSprites(dragIndex, index); setDragIndex(null); setDragOverIndex(null); }}
+              onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
               onClick={() => selectSprite(sprite.id)}
-              onContextMenu={(e) => handleContextMenu(e, sprite.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 cursor-grab active:cursor-grabbing transition-colors duration-100 ${
-                selectedSpriteId === sprite.id
-                  ? "bg-[#1A1A1A] border-l-2 border-[#06B6D4]"
-                  : "border-l-2 border-transparent hover:bg-[#111]"
-              } ${dragOverIndex === index && dragIndex !== index ? "border-t border-t-[#06B6D4]" : ""} ${
-                dragIndex === index ? "opacity-40" : ""
-              }`}
-            >
-              {/* Thumbnail */}
-              <div className="w-8 h-8 rounded bg-[#1A1A1A] border border-[#1E1E1E] flex items-center justify-center shrink-0 overflow-hidden relative">
-                {sprite.image && (
-                  <canvas
-                    ref={(canvas) => {
-                      if (canvas && sprite.image) {
-                        const ctx = canvas.getContext("2d");
-                        if (ctx) {
-                          canvas.width = 28;
-                          canvas.height = 28;
-                          const scale = Math.min(28 / sprite.width, 28 / sprite.height);
-                          const w = sprite.width * scale;
-                          const h = sprite.height * scale;
-                          ctx.clearRect(0, 0, 28, 28);
-                          ctx.drawImage(sprite.image, (28 - w) / 2, (28 - h) / 2, w, h);
-                        }
-                      }
-                    }}
-                    width={28}
-                    height={28}
-                  />
-                )}
-                {processingBg === sprite.id && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                    <div className="w-4 h-4 border-2 border-[#F59E0B] border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
+              onContextMenu={(e) => { e.preventDefault(); selectSprite(sprite.id); setContextMenu({ x: e.clientX, y: e.clientY, spriteId: sprite.id }); }}
+              className={`flex items-center gap-1 cursor-pointer transition-all duration-100 ${
+                selectedSpriteId === sprite.id ? "bg-[var(--bg-elevated)] text-[var(--cyan)]" : "text-[var(--text-dim)] hover:bg-[var(--bg-surface)] hover:text-[var(--text)]"
+              } ${dragOverIndex === index && dragIndex !== index ? "border-t border-t-[var(--cyan)]" : ""} ${dragIndex === index ? "opacity-40" : ""}`}
+              style={{ padding: "2px 4px", fontFamily: "var(--font-mono)", fontSize: 9 }}>
+              <div className="shrink-0 overflow-hidden" style={{ width: 20, height: 20, border: `1px solid ${selectedSpriteId === sprite.id ? "var(--cyan)" : "var(--border)"}`, background: "#0A0A0C" }}>
+                {sprite.image && <canvas ref={(canvas) => {
+                  if (canvas && sprite.image) { const ctx = canvas.getContext("2d"); if (ctx) { canvas.width = 18; canvas.height = 18; const scale = Math.min(18 / sprite.width, 18 / sprite.height); const w = sprite.width * scale, h = sprite.height * scale; ctx.clearRect(0, 0, 18, 18); ctx.drawImage(sprite.image, (18 - w) / 2, (18 - h) / 2, w, h); } }
+                }} width={18} height={18} />}
               </div>
-
-              {/* Name + size */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#A0A0A0] truncate">
-                    {sprite.name}
-                  </span>
-                  {sprite.isAi && (
-                    <span className="font-[family-name:var(--font-mono)] text-[7px] text-[#F59E0B] bg-[#F59E0B]/10 px-1 rounded shrink-0">
-                      AI
-                    </span>
-                  )}
-                </div>
-                <span className="font-[family-name:var(--font-mono)] text-[9px] text-[#666]">
-                  {sprite.width}×{sprite.height}
-                </span>
-              </div>
+              <span className="truncate">{sprite.name}.png</span>
+              {sprite.isAi && <span style={{ fontFamily: "var(--font-mono)", fontSize: 6, color: "var(--amber)", background: "rgba(245,158,11,0.12)", padding: "0 3px", lineHeight: "1.5", letterSpacing: "0.05em", flexShrink: 0 }}>AI</span>}
+              <span className="ml-auto shrink-0" style={{ color: "var(--text-muted)", fontSize: 8 }}>{sprite.width}×{sprite.height}</span>
             </div>
-          ))
-        )}
+          ))}
+        </div>
       </div>
-
-      {/* AI Generate button */}
-      <div className="p-2 border-t border-[#1E1E1E]">
-        <button
-          onClick={() => setAiModalOpen(true)}
-          className="w-full py-2 text-[11px] font-[family-name:var(--font-mono)] font-semibold text-[#F59E0B] border border-[#F59E0B]/20 rounded-md hover:bg-[#F59E0B]/5 transition-colors duration-200 cursor-pointer"
-        >
-          + Generate New...
-        </button>
-      </div>
-
       {/* Context menu */}
       {contextMenu && (
         <>
           <div className="fixed inset-0 z-[199]" onClick={() => setContextMenu(null)} />
-          <div
-            className="fixed z-[200] bg-[#0D0D0D] border border-[#1E1E1E] rounded-lg py-1 min-w-[160px]"
-            style={{
-              left: contextMenu.x,
-              top: contextMenu.y,
-              boxShadow: "0 4px 6px -1px rgba(0,0,0,0.5), 0 2px 4px -1px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.6)",
-            }}
-          >
-            {/* AI actions */}
-            {[
-              { label: "AI Variants", key: "⌘⇧V", action: "variants" as const },
-              { label: "AI Recolor", key: "⌘⇧C", action: "recolor" as const },
-              { label: "AI Upscale 2×", key: "⌘⇧U", action: "upscale" as const },
-              { label: "AI Extend Frames", key: "⌘⇧E", action: "extend-frames" as const },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={() => {
-                  handleAiAction(contextMenu.spriteId, item.action);
-                  setContextMenu(null);
-                }}
-                className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-[family-name:var(--font-mono)] text-[#F59E0B] hover:bg-[#F59E0B]/5 transition-colors duration-100 cursor-pointer"
-              >
-                <span>{item.label}</span>
-                {item.key && <span className="text-[8px] text-[#666] ml-4">{item.key}</span>}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                handleRemoveBg(contextMenu.spriteId);
-                setContextMenu(null);
-              }}
-              disabled={processingBg !== null}
-              className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-[family-name:var(--font-mono)] text-[#F59E0B] hover:bg-[#F59E0B]/5 transition-colors duration-100 cursor-pointer disabled:opacity-40"
-            >
-              <span>{processingBg ? "Removing BG..." : "AI Remove BG"}</span>
-            </button>
-
-            <div className="h-px bg-[#1E1E1E] my-1" />
-
-            {/* Animation actions */}
-            <button
-              onClick={() => {
-                addToAnimation(contextMenu.spriteId);
-                setContextMenu(null);
-              }}
-              className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-[family-name:var(--font-mono)] text-[#06B6D4] hover:bg-[#06B6D4]/5 transition-colors duration-100 cursor-pointer"
-            >
-              <span>Add to Animation</span>
-              <span className="text-[8px] text-[#666] ml-4">⌘⇧A</span>
-            </button>
-            <button
-              onClick={() => {
-                setAnimationFrames(sprites.map((s) => s.id));
-                setContextMenu(null);
-              }}
-              className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-[family-name:var(--font-mono)] text-[#06B6D4] hover:bg-[#06B6D4]/5 transition-colors duration-100 cursor-pointer"
-            >
-              <span>Add All to Animation</span>
-            </button>
-
-            <div className="h-px bg-[#1E1E1E] my-1" />
-
-            {/* Standard actions */}
-            {[
-              { label: "Duplicate", key: "⌘D", action: () => {} },
-              { label: "Rename", key: "F2", action: () => {} },
-              {
-                label: "Delete",
-                key: "⌫",
-                action: () => {
-                  removeSprite(contextMenu.spriteId);
-                  setContextMenu(null);
-                },
-                danger: true,
-              },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={() => {
-                  item.action();
-                  setContextMenu(null);
-                }}
-                className={`flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-[family-name:var(--font-mono)] transition-colors duration-100 cursor-pointer ${
-                  item.danger
-                    ? "text-red-400 hover:bg-red-400/5"
-                    : "text-[#A0A0A0] hover:bg-[#1A1A1A] hover:text-white"
-                }`}
-              >
-                <span>{item.label}</span>
-                <span className="text-[8px] text-[#666] ml-4">{item.key}</span>
-              </button>
-            ))}
+          <div className="fixed z-[200] py-0.5" style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 160, background: "var(--bg-panel)", border: "1px solid var(--border)", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.5), 0 12px 32px rgba(0,0,0,0.6)" }}>
+            <CtxItem label="Duplicate" shortcut="⌘D" onClick={() => setContextMenu(null)} />
+            <CtxItem label="Rename" shortcut="F2" onClick={() => setContextMenu(null)} />
+            <CtxItem label="Delete" shortcut="⌫" danger onClick={() => { removeSprite(contextMenu.spriteId); setContextMenu(null); }} />
+            <div style={{ height: 1, background: "var(--border)", margin: "3px 0" }} />
+            <CtxItem label="AI Variants" shortcut="⌘⇧V" ai onClick={() => { handleAiAction(contextMenu.spriteId, "variants"); setContextMenu(null); }} />
+            <CtxItem label="AI Recolor" shortcut="⌘⇧C" ai onClick={() => { handleAiAction(contextMenu.spriteId, "recolor"); setContextMenu(null); }} />
+            <CtxItem label="AI Upscale 2×" shortcut="⌘⇧U" ai onClick={() => { handleAiAction(contextMenu.spriteId, "upscale"); setContextMenu(null); }} />
+            <CtxItem label={processingBg ? "Removing BG..." : "AI Remove BG"} ai onClick={() => { handleRemoveBg(contextMenu.spriteId); setContextMenu(null); }} />
+            <div style={{ height: 1, background: "var(--border)", margin: "3px 0" }} />
+            <CtxItem label="AI Extend Frames" shortcut="⌘⇧E" ai onClick={() => { handleAiAction(contextMenu.spriteId, "extend-frames"); setContextMenu(null); }} />
           </div>
         </>
       )}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Navbar } from "@/components/landing/Navbar";
 
 export const metadata: Metadata = {
   title: "Editor — SpriteForge",
@@ -10,5 +11,10 @@ export default function EditorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <Navbar />
+      {children}
+    </>
+  );
 }

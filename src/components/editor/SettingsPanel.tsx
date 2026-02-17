@@ -6,26 +6,31 @@ import { useMemo, useState } from "react";
 
 const FORMAT_GROUPS = getFormatGroups();
 
-function useSheetStats() {
-  const bins = useEditorStore((s) => s.bins);
-  const activeBin = useEditorStore((s) => s.activeBin);
-  const sprites = useEditorStore((s) => s.sprites);
-  const config = useEditorStore((s) => s.packingConfig);
-  return useMemo(() => {
-    const bin = bins[activeBin];
-    if (!bin) return null;
-    const usedArea = bin.rects.reduce((sum, r) => sum + r.width * r.height, 0);
-    const totalArea = bin.width * bin.height;
-    const density = totalArea > 0 ? (usedArea / totalArea) * 100 : 0;
-    const vramBytes = totalArea * 4;
-    const isPot = (bin.width & (bin.width - 1)) === 0 && (bin.height & (bin.height - 1)) === 0;
-    return {
-      width: bin.width, height: bin.height,
-      sprites: sprites.length, density, waste: 100 - density,
-      vram: vramBytes < 1024 * 1024 ? `${(vramBytes / 1024).toFixed(1)} KB` : `${(vramBytes / (1024 * 1024)).toFixed(1)} MB`,
-      pot: isPot, drawCalls: bins.length, format: config.exportFormat,
-    };
-  }, [bins, activeBin, sprites.length, config.exportFormat]);
+const S: Record<string, React.CSSProperties> = {
+  section: { padding: "6px 8px", borderBottom: "1px solid var(--border)" },
+  h4: { fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 5 },
+  row: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, fontSize: 10 },
+  label: { color: "var(--text-dim)", fontSize: 10 },
+  val: { fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-dim)" },
+  valCyan: { fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--cyan)" },
+  valGreen: { fontFamily: "var(--font-mono)", fontSize: 9, color: "#22C55E" },
+  select: { background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 9, padding: "2px 4px", height: 20 },
+  toggle: { width: 24, height: 12, position: "relative" as const, cursor: "pointer", transition: "all 0.15s", border: "1px solid var(--border)" },
+};
+
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <div onClick={onClick} style={{
+      ...S.toggle,
+      background: on ? "var(--cyan)" : "var(--bg-elevated)",
+      borderColor: on ? "var(--cyan)" : "var(--border)",
+    }}>
+      <div style={{
+        position: "absolute", top: 1, left: on ? 13 : 1,
+        width: 8, height: 8, background: "var(--text)", transition: "left 0.15s",
+      }} />
+    </div>
+  );
 }
 
 export function SettingsPanel() {
@@ -33,237 +38,110 @@ export function SettingsPanel() {
   const updateConfig = useEditorStore((s) => s.updatePackingConfig);
   const bins = useEditorStore((s) => s.bins);
   const activeBin = useEditorStore((s) => s.activeBin);
-  const setActiveBin = useEditorStore((s) => s.setActiveBin);
+  const sprites = useEditorStore((s) => s.sprites);
   const { data: session } = useSession();
   const tier = (session?.user as Record<string, unknown> | undefined)?.tier as string ?? "FREE";
   const isPaid = tier === "PRO" || tier === "TEAM";
-  const stats = useSheetStats();
   const [copied, setCopied] = useState(false);
 
-  return (
-    <div className="w-56 bg-[#0D0D0D] border-l border-[#1E1E1E] flex flex-col shrink-0 overflow-y-auto">
-      {/* Header */}
-      <div className="px-3 py-2 border-b border-[#1E1E1E]">
-        <span className="font-[family-name:var(--font-mono)] text-[10px] text-[#666] uppercase tracking-wider">
-          Settings
-        </span>
-      </div>
+  const stats = useMemo(() => {
+    const bin = bins[activeBin];
+    if (!bin) return null;
+    const used = bin.rects.reduce((s, r) => s + r.width * r.height, 0);
+    const total = bin.width * bin.height;
+    const d = total > 0 ? (used / total) * 100 : 0;
+    const vram = total * 4;
+    const pot = (bin.width & (bin.width - 1)) === 0 && (bin.height & (bin.height - 1)) === 0;
+    return { w: bin.width, h: bin.height, sprites: sprites.length, d, waste: 100 - d, vram: vram < 1048576 ? `~${(vram/1024).toFixed(1)} KB` : `~${(vram/1048576).toFixed(1)} MB`, pot, draws: bins.length };
+  }, [bins, activeBin, sprites.length]);
 
+  return (
+    <div className="flex flex-col overflow-y-auto" style={{ background: "var(--bg-panel)", borderLeft: "1px solid var(--border)" }}>
       {/* Sheet Stats */}
       {stats && (
-        <div className="p-3 border-b border-[#1E1E1E]">
-          <span className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-2">Sheet Stats</span>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-            {[
-              { label: "Texture", value: `${stats.width}×${stats.height}` },
-              { label: "Format", value: "RGBA8888" },
-              { label: "VRAM", value: stats.vram },
-              { label: "Sprites", value: String(stats.sprites) },
-              { label: "Density", value: `${stats.density.toFixed(1)}%`, highlight: true },
-              { label: "Waste", value: `${stats.waste.toFixed(1)}%` },
-              { label: "POT", value: stats.pot ? "Yes" : "No", highlight: stats.pot },
-              { label: "Draw Calls", value: String(stats.drawCalls) },
-            ].map((row) => (
-              <div key={row.label} className="flex justify-between">
-                <span className="font-[family-name:var(--font-mono)] text-[9px] text-[#666]">{row.label}</span>
-                <span className={`font-[family-name:var(--font-mono)] text-[9px] ${row.highlight ? "text-[#06B6D4]" : "text-[#A0A0A0]"}`}>{row.value}</span>
-              </div>
-            ))}
-          </div>
+        <div style={S.section}>
+          <h4 style={S.h4}>Sheet Stats</h4>
+          <div style={S.row}><label style={S.label}>Texture</label><span style={S.valCyan}>{stats.w} × {stats.h}</span></div>
+          <div style={S.row}><label style={S.label}>Format</label><span style={S.val}>RGBA8888</span></div>
+          <div style={S.row}><label style={S.label}>VRAM</label><span style={S.val}>{stats.vram}</span></div>
+          <div style={S.row}><label style={S.label}>Sprites</label><span style={S.val}>{stats.sprites}</span></div>
+          <div style={S.row}><label style={S.label}>Density</label><span style={S.valGreen}>{stats.d.toFixed(1)}%</span></div>
+          <div style={S.row}><label style={S.label}>Waste</label><span style={{ ...S.val, color: "var(--text-muted)" }}>{stats.waste.toFixed(1)}%</span></div>
+          <div style={S.row}><label style={S.label}>POT</label><span style={stats.pot ? S.valGreen : S.val}>{stats.pot ? "Yes" : "No"}</span></div>
+          <div style={S.row}><label style={S.label}>Draw Calls</label><span style={S.val}>{stats.draws}</span></div>
         </div>
       )}
-
-      <div className="p-3 space-y-4">
-        {/* Canvas Size */}
-        <div>
-          <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-            Max Atlas Size
-          </label>
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <input
-                type="number"
-                value={config.maxWidth}
-                onChange={(e) => updateConfig({ maxWidth: Number(e.target.value) })}
-                className="w-full bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1 text-[11px] font-[family-name:var(--font-mono)] text-white focus:border-[#06B6D4] focus:outline-none transition-colors duration-150"
-              />
-              <span className="text-[8px] text-[#666] font-[family-name:var(--font-mono)] mt-0.5 block">W</span>
-            </div>
-            <div className="flex-1">
-              <input
-                type="number"
-                value={config.maxHeight}
-                onChange={(e) => updateConfig({ maxHeight: Number(e.target.value) })}
-                className="w-full bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1 text-[11px] font-[family-name:var(--font-mono)] text-white focus:border-[#06B6D4] focus:outline-none transition-colors duration-150"
-              />
-              <span className="text-[8px] text-[#666] font-[family-name:var(--font-mono)] mt-0.5 block">H</span>
-            </div>
-          </div>
+      {/* Packing */}
+      <div style={S.section}>
+        <h4 style={S.h4}>Packing</h4>
+        <div style={S.row}><label style={S.label}>Algorithm</label>
+          <select style={S.select}><option>MaxRects BSS</option><option>MaxRects BL</option><option>MaxRects BAF</option></select>
         </div>
-
-        {/* Padding */}
-        <div>
-          <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-            Padding
-          </label>
-          <input
-            type="number"
-            min={0}
-            max={32}
-            value={config.padding}
-            onChange={(e) => updateConfig({ padding: Number(e.target.value) })}
-            className="w-full bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1 text-[11px] font-[family-name:var(--font-mono)] text-white focus:border-[#06B6D4] focus:outline-none transition-colors duration-150"
-          />
+        <div style={S.row}><label style={S.label}>Sheet Size</label>
+          <select style={S.select} value={`${config.maxWidth} × ${config.maxHeight}`}
+            onChange={(e) => { const v = e.target.value; if (v === "Auto") { updateConfig({ maxWidth: 4096, maxHeight: 4096 }); } else { const [w,h] = v.split(" × ").map(Number); updateConfig({ maxWidth: w, maxHeight: h }); } }}>
+            <option>512 × 512</option><option>1024 × 1024</option><option>2048 × 2048</option><option>Auto</option>
+          </select>
         </div>
-
-        {/* Border */}
-        <div>
-          <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-            Border
-          </label>
-          <input
-            type="number"
-            min={0}
-            max={32}
-            value={config.border}
-            onChange={(e) => updateConfig({ border: Number(e.target.value) })}
-            className="w-full bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1 text-[11px] font-[family-name:var(--font-mono)] text-white focus:border-[#06B6D4] focus:outline-none transition-colors duration-150"
-          />
+        <div style={S.row}><label style={S.label}>Padding</label>
+          <select style={S.select} value={`${config.padding}px`}
+            onChange={(e) => updateConfig({ padding: parseInt(e.target.value) })}>
+            <option>0px</option><option>1px</option><option>2px</option><option>4px</option>
+          </select>
         </div>
-
-        {/* Toggles */}
-        <div className="space-y-2">
-          {[
-            { label: "Power of Two", key: "pot" as const, value: config.pot },
-            { label: "Allow Rotation", key: "allowRotation" as const, value: config.allowRotation },
-            { label: "Trim Transparency", key: "trimTransparency" as const, value: config.trimTransparency },
-          ].map((toggle) => (
-            <label key={toggle.key} className="flex items-center justify-between cursor-pointer group">
-              <span className="text-[11px] text-[#A0A0A0] group-hover:text-white transition-colors duration-150">
-                {toggle.label}
-              </span>
-              <button
-                onClick={() => updateConfig({ [toggle.key]: !toggle.value })}
-                className={`w-8 h-4 rounded-full transition-colors duration-200 cursor-pointer ${
-                  toggle.value ? "bg-[#06B6D4]" : "bg-[#333]"
-                }`}
-              >
-                <div
-                  className={`w-3 h-3 rounded-full bg-white transition-transform duration-200 ${
-                    toggle.value ? "translate-x-4.5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </label>
-          ))}
+        <div style={S.row}><label style={S.label}>Power of Two</label>
+          <Toggle on={config.pot} onClick={() => updateConfig({ pot: !config.pot })} />
         </div>
-
-        {/* Algorithm */}
-        <div>
-          <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-            Algorithm
-          </label>
-          <div className="bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1.5 text-[11px] font-[family-name:var(--font-mono)] text-[#06B6D4]">
-            MaxRects Best Short Side
-          </div>
+        <div style={S.row}><label style={S.label}>Allow Rotation</label>
+          <Toggle on={config.allowRotation} onClick={() => updateConfig({ allowRotation: !config.allowRotation })} />
         </div>
-
-        {/* Export Format */}
-        <div>
-          <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-            Export Format
-          </label>
-          <select
-            value={config.exportFormat}
-            onChange={(e) => {
-              const id = e.target.value;
-              if (!isPaid && !isFormatFree(id)) return;
-              updateConfig({ exportFormat: id });
-            }}
-            className="w-full bg-[#1A1A1A] border border-[#1E1E1E] rounded px-2 py-1.5 text-[11px] font-[family-name:var(--font-mono)] text-white focus:border-[#06B6D4] focus:outline-none transition-colors duration-150 cursor-pointer appearance-none"
-          >
+        <div style={S.row}><label style={S.label}>Trim Alpha</label>
+          <Toggle on={config.trimTransparency} onClick={() => updateConfig({ trimTransparency: !config.trimTransparency })} />
+        </div>
+      </div>
+      {/* Export */}
+      <div style={S.section}>
+        <h4 style={S.h4}>Export</h4>
+        <div style={S.row}><label style={S.label}>Format</label>
+          <select style={S.select} value={config.exportFormat}
+            onChange={(e) => { if (!isPaid && !isFormatFree(e.target.value)) return; updateConfig({ exportFormat: e.target.value }); }}>
             {FORMAT_GROUPS.map((g) => (
               <optgroup key={g.group} label={g.group}>
-                {g.formats.map((fmt) => (
-                  <option key={fmt.id} value={fmt.id} disabled={!isPaid && !isFormatFree(fmt.id)}>
-                    {fmt.label}{!isPaid && !isFormatFree(fmt.id) ? " 🔒 PRO" : ""}
-                  </option>
-                ))}
+                {g.formats.map((f) => <option key={f.id} value={f.id} disabled={!isPaid && !isFormatFree(f.id)}>{f.label}{!isPaid && !isFormatFree(f.id) ? " 🔒" : ""}</option>)}
               </optgroup>
             ))}
           </select>
         </div>
-
-        {/* Bin selector */}
-        {bins.length > 1 && (
-          <div>
-            <label className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider block mb-1.5">
-              Bins ({bins.length})
-            </label>
-            <div className="flex gap-1 flex-wrap">
-              {bins.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveBin(i)}
-                  className={`px-2 py-1 text-[10px] font-[family-name:var(--font-mono)] rounded cursor-pointer transition-colors duration-150 ${
-                    activeBin === i
-                      ? "bg-[#06B6D4] text-black"
-                      : "bg-[#1A1A1A] text-[#666] hover:text-white"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Code Snippet */}
-        {stats && (
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-[family-name:var(--font-mono)] text-[9px] text-[#666] uppercase tracking-wider">Code Snippet</span>
-              {isPaid && (
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(generateCodeSnippet(config.exportFormat, "spritesheet"));
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  }}
-                  className="text-[8px] font-[family-name:var(--font-mono)] text-[#06B6D4] hover:text-[#22D3EE] cursor-pointer transition-colors"
-                >
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <pre className={`bg-[#1A1A1A] border border-[#1E1E1E] rounded p-2 text-[9px] font-[family-name:var(--font-mono)] text-[#A0A0A0] overflow-x-auto max-h-32 leading-relaxed ${!isPaid ? "blur-[2px] select-none" : ""}`}>
-                {generateCodeSnippet(config.exportFormat, "spritesheet")}
-              </pre>
-              {!isPaid && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[10px] font-[family-name:var(--font-mono)] text-[#F59E0B] bg-[#0D0D0D]/80 px-2 py-1 rounded">PRO Feature</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Download ZIP */}
-        <button
-          onClick={() => {
-            if (bins.length === 0) return;
-            import("@/lib/exporter").then(({ exportSpriteSheet }) => {
-              const sprites = useEditorStore.getState().sprites;
-              exportSpriteSheet(bins, sprites, config, "spritesheet", { watermark: !isPaid });
-            });
-          }}
+        <button onClick={() => { if (bins.length === 0) return; import("@/lib/exporter").then(({ exportSpriteSheet }) => { exportSpriteSheet(bins, sprites, config, "spritesheet", { watermark: !isPaid }); }); }}
           disabled={bins.length === 0}
-          className="w-full py-2.5 text-[11px] font-[family-name:var(--font-mono)] font-bold text-black bg-[#22C55E] rounded-md hover:brightness-110 transition-all duration-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          DOWNLOAD .ZIP
+          style={{ width: "100%", height: 22, fontSize: 9, fontFamily: "var(--font-mono)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", background: "var(--cyan)", color: "#fff", border: "1px solid var(--cyan)", marginTop: 4, cursor: bins.length === 0 ? "not-allowed" : "pointer", opacity: bins.length === 0 ? 0.3 : 1 }}>
+          Download .zip ↓
         </button>
       </div>
+      {/* Code Snippet */}
+      {stats && (
+        <div style={S.section}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 5 }}>
+            <h4 style={{ ...S.h4, marginBottom: 0 }}>Code Snippet</h4>
+            {isPaid && (
+              <button onClick={() => { navigator.clipboard.writeText(generateCodeSnippet(config.exportFormat, "spritesheet")); setCopied(true); setTimeout(() => setCopied(false), 1200); }}
+                style={{ fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-muted)", background: "var(--bg-elevated)", border: "1px solid var(--border)", padding: "1px 4px", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {copied ? "Copied" : "Copy"}
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <pre style={{ background: "var(--bg)", border: "1px solid var(--border)", padding: 6, fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-dim)", whiteSpace: "pre", overflow: "auto", lineHeight: 1.4, filter: isPaid ? "none" : "blur(2px)" }}>
+              {generateCodeSnippet(config.exportFormat, "spritesheet")}
+            </pre>
+            {!isPaid && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--amber)", background: "rgba(13,13,13,0.8)", padding: "2px 8px" }}>PRO Feature</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
