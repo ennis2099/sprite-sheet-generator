@@ -23,43 +23,244 @@ export default function SignInPage() {
     }
   };
 
-  const inputStyle = "w-full py-2.5 px-3 bg-[#111] border border-[#1E1E1E] rounded-lg text-[12px] text-white placeholder-[#555] outline-none focus:border-[#333]";
-  const btnStyle = "w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#1A1A1A] border border-[#1E1E1E] rounded-lg text-[12px] text-white hover:bg-[#222] transition-colors duration-150 cursor-pointer";
-
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center">
-      <div className="w-full max-w-sm bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-8">
-        <h1 className="font-[family-name:var(--font-heading)] text-xl text-white text-center mb-2">
-          Sign in to SpriteForge
-        </h1>
-        <p className="text-[12px] text-[#666] text-center mb-6 font-[family-name:var(--font-mono)]">
-          Save projects, unlock PRO features
-        </p>
+    <div
+      className="min-h-screen flex items-center justify-center relative"
+      style={{ background: "var(--bg)" }}
+    >
+      {/* Grid background */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+        }}
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-3 mb-4">
-          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className={inputStyle} required />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className={inputStyle} required />
-          {error && <p className="text-[11px] text-red-400">{error}</p>}
-          <button type="submit" disabled={loading} className={`${btnStyle} !bg-white !text-black !border-white disabled:opacity-50`}>
-            {loading ? "Signing in..." : "Sign in"}
+      <div className="relative w-full max-w-[420px] mx-4">
+        {/* Logo */}
+        <Link href="/" className="flex items-center justify-center gap-2.5 mb-8">
+          <svg viewBox="0 0 20 20" fill="none" width="24" height="24">
+            <rect width="20" height="20" fill="#fff" />
+            <rect x="4" y="4" width="5" height="5" fill="#000" />
+            <rect x="11" y="4" width="5" height="5" fill="#000" />
+            <rect x="4" y="11" width="5" height="5" fill="#000" />
+            <rect x="11" y="11" width="5" height="5" fill="#06B6D4" />
+          </svg>
+          <span
+            className="text-white"
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "16px",
+              letterSpacing: "0.06em",
+            }}
+          >
+            SPRITEFORGE
+          </span>
+        </Link>
+
+        {/* Card */}
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border)",
+            padding: "40px",
+          }}
+        >
+          {/* Cyan accent line */}
+          <div
+            className="absolute top-0 left-[40px] right-[40px]"
+            style={{ height: "1px", background: "var(--cyan)", opacity: 0.4 }}
+          />
+
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "24px",
+              fontWeight: 700,
+              color: "#fff",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              marginBottom: "6px",
+            }}
+          >
+            Sign In
+          </h1>
+          <p
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "12px",
+              color: "var(--text-muted)",
+              marginBottom: "32px",
+            }}
+          >
+            Save projects, unlock PRO features
+          </p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: "6px",
+                }}
+              >
+                Email
+              </label>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full outline-none placeholder:text-[#333]"
+                style={{
+                  height: "42px",
+                  padding: "0 14px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--cyan)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: "6px",
+                }}
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full outline-none placeholder:text-[#333]"
+                style={{
+                  height: "42px",
+                  padding: "0 14px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--cyan)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
+              />
+            </div>
+
+            {error && (
+              <p style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "#EF4444" }}>
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="cursor-pointer disabled:opacity-50"
+              style={{
+                height: "42px",
+                background: "#fff",
+                color: "#000",
+                border: "1px solid #fff",
+                fontSize: "12px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                transition: "all 0.12s",
+                marginTop: "4px",
+              }}
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1" style={{ height: "1px", background: "var(--border)" }} />
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "10px",
+                color: "var(--text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+              }}
+            >
+              or
+            </span>
+            <div className="flex-1" style={{ height: "1px", background: "var(--border)" }} />
+          </div>
+
+          {/* GitHub */}
+          <button
+            onClick={() => signIn("github", { callbackUrl: "/editor" })}
+            className="w-full flex items-center justify-center gap-2.5 cursor-pointer"
+            style={{
+              height: "42px",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: "var(--text-dim)",
+              fontSize: "12px",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+              transition: "all 0.12s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--text-muted)";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border)";
+              e.currentTarget.style.color = "var(--text-dim)";
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+            </svg>
+            Continue with GitHub
           </button>
-        </form>
-
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-px bg-[#1E1E1E]" />
-          <span className="text-[10px] text-[#444] font-[family-name:var(--font-mono)]">OR</span>
-          <div className="flex-1 h-px bg-[#1E1E1E]" />
         </div>
 
-        <button onClick={() => signIn("github", { callbackUrl: "/editor" })} className={btnStyle}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-          </svg>
-          Continue with GitHub
-        </button>
-
-        <p className="text-[11px] text-[#555] text-center mt-5 font-[family-name:var(--font-mono)]">
-          No account? <Link href="/auth/signup" className="text-white hover:underline">Sign up</Link>
+        {/* Footer link */}
+        <p
+          className="text-center mt-6"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "12px",
+            color: "var(--text-muted)",
+          }}
+        >
+          No account?{" "}
+          <Link
+            href="/auth/signup"
+            className="hover:underline"
+            style={{ color: "var(--cyan)" }}
+          >
+            Create one
+          </Link>
         </p>
       </div>
     </div>
