@@ -109,8 +109,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   activeBin: 0,
   selectedSpriteId: null,
   packingConfig: {
-    maxWidth: 2048,
-    maxHeight: 2048,
+    maxWidth: 512,
+    maxHeight: 512,
     padding: 2,
     border: 0,
     pot: true,
