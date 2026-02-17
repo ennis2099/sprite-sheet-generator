@@ -1,7 +1,11 @@
+"use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { UserMenu } from "@/components/auth/UserMenu";
 
 export function Navbar() {
+  const pathname = usePathname();
+  const isEditor = pathname?.startsWith("/editor");
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50 backdrop-blur-sm"
@@ -45,7 +49,7 @@ export function Navbar() {
               style={{
                 fontSize: "11px",
                 fontWeight: 500,
-                color: "var(--text-muted)",
+                color: isEditor && label === "Editor" ? "var(--text)" : "var(--text-muted)",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
               }}

@@ -2,7 +2,20 @@ import { useEditorStore, SpriteItem } from "@/stores/editor-store";
 import { removeBackground } from "@/lib/bg-removal";
 import { useCallback, useRef, useState } from "react";
 
-function CtxItem({ label, shortcut, ai, danger, onClick }: { label: string; shortcut?: string; ai?: boolean; danger?: boolean; onClick: () => void }) {
+function CtxIcon({ d, type }: { d: string; type?: string }) {
+  if (type === "dup") return <svg viewBox="0 0 16 16" width="11" height="11"><rect x="1" y="1" width="6" height="6" fill="currentColor" opacity="0.6"/><rect x="9" y="1" width="6" height="6" fill="currentColor" opacity="0.4"/><rect x="1" y="9" width="6" height="6" fill="currentColor" opacity="0.3"/></svg>;
+  if (type === "rename") return <svg viewBox="0 0 16 16" width="11" height="11"><path d="M2 2h12v12H2z" fill="none" stroke="currentColor" strokeWidth="1.5"/><path d="M5 8h6M8 5v6" stroke="currentColor" strokeWidth="1.5"/></svg>;
+  if (type === "del") return <svg viewBox="0 0 16 16" width="11" height="11"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5"/></svg>;
+  if (type === "star") return <svg viewBox="0 0 16 16" width="11" height="11"><path d="M8 0l1.5 4.5L14 6l-4.5 1.5L8 12l-1.5-4.5L2 6l4.5-1.5z" fill="currentColor"/></svg>;
+  if (type === "recolor") return <svg viewBox="0 0 16 16" width="11" height="11"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="8" r="2.5" fill="currentColor"/></svg>;
+  if (type === "upscale") return <svg viewBox="0 0 16 16" width="11" height="11"><path d="M3 13L13 3M13 3H7M13 3v6" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>;
+  if (type === "rmbg") return <svg viewBox="0 0 16 16" width="11" height="11"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2"/></svg>;
+  if (type === "extend") return <svg viewBox="0 0 16 16" width="11" height="11"><rect x="1" y="4" width="5" height="8" fill="currentColor" opacity="0.7"/><rect x="7" y="2" width="5" height="12" fill="currentColor" opacity="0.5"/><path d="M14 6l-2 2 2 2" stroke="currentColor" strokeWidth="1" fill="none"/></svg>;
+  if (type === "anim") return <svg viewBox="0 0 16 16" width="11" height="11"><rect x="2" y="2" width="5" height="12" fill="currentColor" opacity="0.6"/><rect x="9" y="2" width="5" height="12" fill="currentColor" opacity="0.3"/></svg>;
+  return null;
+}
+
+function CtxItem({ label, shortcut, ai, danger, icon, onClick }: { label: string; shortcut?: string; ai?: boolean; danger?: boolean; icon?: string; onClick: () => void }) {
   const color = ai ? "var(--amber)" : danger ? "#EF4444" : "var(--text-dim)";
   const hoverBg = ai ? "rgba(245,158,11,0.08)" : danger ? "rgba(239,68,68,0.08)" : "var(--bg-elevated)";
   return (
@@ -10,6 +23,7 @@ function CtxItem({ label, shortcut, ai, danger, onClick }: { label: string; shor
       style={{ padding: "4px 10px", fontFamily: "var(--font-mono)", fontSize: 9, color }}
       onMouseEnter={(e) => { e.currentTarget.style.background = hoverBg; e.currentTarget.style.color = ai ? "#FBBF24" : danger ? "#EF4444" : "var(--text)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = ""; e.currentTarget.style.color = color; }}>
+      {icon && <span style={{ width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CtxIcon d="" type={icon} /></span>}
       <span>{label}</span>
       {shortcut && <span className="ml-auto" style={{ fontSize: 7, color: "var(--text-muted)" }}>{shortcut}</span>}
     </button>
@@ -161,16 +175,17 @@ export function SpriteList() {
         <>
           <div className="fixed inset-0 z-[199]" onClick={() => setContextMenu(null)} />
           <div className="fixed z-[200] py-0.5" style={{ left: contextMenu.x, top: contextMenu.y, minWidth: 160, background: "var(--bg-panel)", border: "1px solid var(--border)", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.5), 0 12px 32px rgba(0,0,0,0.6)" }}>
-            <CtxItem label="Duplicate" shortcut="⌘D" onClick={() => setContextMenu(null)} />
-            <CtxItem label="Rename" shortcut="F2" onClick={() => setContextMenu(null)} />
-            <CtxItem label="Delete" shortcut="⌫" danger onClick={() => { removeSprite(contextMenu.spriteId); setContextMenu(null); }} />
+            <CtxItem icon="dup" label="Duplicate" shortcut="⌘D" onClick={() => setContextMenu(null)} />
+            <CtxItem icon="rename" label="Rename" shortcut="F2" onClick={() => setContextMenu(null)} />
+            <CtxItem icon="del" label="Delete" shortcut="⌫" danger onClick={() => { removeSprite(contextMenu.spriteId); setContextMenu(null); }} />
             <div style={{ height: 1, background: "var(--border)", margin: "3px 0" }} />
-            <CtxItem label="AI Variants" shortcut="⌘⇧V" ai onClick={() => { handleAiAction(contextMenu.spriteId, "variants"); setContextMenu(null); }} />
-            <CtxItem label="AI Recolor" shortcut="⌘⇧C" ai onClick={() => { handleAiAction(contextMenu.spriteId, "recolor"); setContextMenu(null); }} />
-            <CtxItem label="AI Upscale 2×" shortcut="⌘⇧U" ai onClick={() => { handleAiAction(contextMenu.spriteId, "upscale"); setContextMenu(null); }} />
-            <CtxItem label={processingBg ? "Removing BG..." : "AI Remove BG"} ai onClick={() => { handleRemoveBg(contextMenu.spriteId); setContextMenu(null); }} />
+            <CtxItem icon="star" label="AI Variants" shortcut="⌘⇧V" ai onClick={() => { handleAiAction(contextMenu.spriteId, "variants"); setContextMenu(null); }} />
+            <CtxItem icon="recolor" label="AI Recolor" shortcut="⌘⇧C" ai onClick={() => { handleAiAction(contextMenu.spriteId, "recolor"); setContextMenu(null); }} />
+            <CtxItem icon="upscale" label="AI Upscale 2×" shortcut="⌘⇧U" ai onClick={() => { handleAiAction(contextMenu.spriteId, "upscale"); setContextMenu(null); }} />
+            <CtxItem icon="rmbg" label={processingBg ? "Removing BG..." : "AI Remove BG"} ai onClick={() => { handleRemoveBg(contextMenu.spriteId); setContextMenu(null); }} />
             <div style={{ height: 1, background: "var(--border)", margin: "3px 0" }} />
-            <CtxItem label="AI Extend Frames" shortcut="⌘⇧E" ai onClick={() => { handleAiAction(contextMenu.spriteId, "extend-frames"); setContextMenu(null); }} />
+            <CtxItem icon="anim" label="Add to Animation" onClick={() => { addToAnimation(contextMenu.spriteId); setContextMenu(null); }} />
+            <CtxItem icon="extend" label="AI Extend Frames" shortcut="⌘⇧E" ai onClick={() => { handleAiAction(contextMenu.spriteId, "extend-frames"); setContextMenu(null); }} />
           </div>
         </>
       )}

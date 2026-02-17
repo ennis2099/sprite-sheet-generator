@@ -11,6 +11,8 @@ import { useAutoPack } from "@/hooks/use-auto-pack";
 import { useAnimationPlayback } from "@/hooks/use-animation-playback";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useEditorStore } from "@/stores/editor-store";
+import { loadDemoSprites } from "@/lib/demo-sprites";
+import { useEffect, useRef } from "react";
 
 export default function EditorPage() {
   useAutoPack();
@@ -19,6 +21,19 @@ export default function EditorPage() {
 
   const aiModalOpen = useEditorStore((s) => s.aiModalOpen);
   const setAiModalOpen = useEditorStore((s) => s.setAiModalOpen);
+  const sprites = useEditorStore((s) => s.sprites);
+  const addSprites = useEditorStore((s) => s.addSprites);
+  const setAnimationFrames = useEditorStore((s) => s.setAnimationFrames);
+  const demoLoaded = useRef(false);
+
+  useEffect(() => {
+    if (demoLoaded.current || sprites.length > 0) return;
+    demoLoaded.current = true;
+    loadDemoSprites().then((demo) => {
+      addSprites(demo);
+      setAnimationFrames(demo.map((s) => s.id));
+    });
+  }, [sprites.length, addSprites, setAnimationFrames]);
 
   return (
     <div className="fixed inset-0 top-[var(--nav-h)] bg-[var(--bg)] text-white flex flex-col overflow-hidden">
